@@ -23,9 +23,14 @@ def read_data(fname):
 	return ss
 
 
-def data_to_array(table_string=None, str_impossible="X", str_available="O", str_preference="OO", delimiter="\t"):
+def data_to_array(table_string=None, names_string=None, str_impossible="X", str_available="O", str_preference="OO", manager_char="#", delimiter="\t"):
 	if table_string is None:
 		table_string = read_data(default_data_file)
+	if names_string is None:
+		names_string = read_data(default_volunteers_file)
+	names_string = (s for s in names_string.split("\n") if s)
+	table_string = (s for s in table_string.split("\n") if s)
+	managers = [i for i,s in enumerate(names_string) if s.startswith(manager_char)]
 
 	available  = []  # np.zeros((N, T), dtype=bool)
 	preference = []  # np.zeros((N, T), dtype=bool)
@@ -34,10 +39,7 @@ def data_to_array(table_string=None, str_impossible="X", str_available="O", str_
 	avail_dict = {".": False, "-": False, str_impossible: False, str_available: True, str_preference: True}
 	pref_dict = {".": False, "-": False, str_impossible: False, str_available: False, str_preference: True}
 
-	for i, ss_row in enumerate(table_string.split("\n")):
-		if not ss_row:
-			continue  # (ignorando linhas vazias)
-
+	for ss_row in table_string:
 		ss_row = ss_row.split(delimiter)
 		prev_week.append(int(ss_row.pop(0)))
 
@@ -54,7 +56,7 @@ def data_to_array(table_string=None, str_impossible="X", str_available="O", str_
 	prev_week  = np.asarray(prev_week,  dtype=int)
 	# N, T = available.shape
 
-	return available, preference, prev_week
+	return available, preference, prev_week, managers
 
 
 def show_results(results):
@@ -64,9 +66,14 @@ def show_results(results):
 	solver_stats_dict = results["problem"].solver_stats.__dict__
 	print("Solver Stats:\n ", solver_stats_dict)
 
+	alpha, beta, gamma = results["alpha"], results["beta"], results["gamma"]
+	penalty_1 = results["penalty_1"].value
+	penalty_2 = results["penalty_2"].value
+	same_day_bonus = results["same_day_bonus"].value
 	print("\n[load_cost]: {}".format(results["load_cost"].value))
-	print("\n[penalty_1]: {}".format(results["penalty_1"].value))
-	print("\n[penalty_2]: {}".format(results["penalty_2"].value))
+	print("\n[penalty_1]: (alpha = {:.2f}) * {:.6g} = {}".format(alpha, (1/alpha) * penalty_1, penalty_1))
+	print("\n[penalty_2]: (beta = {:.2f}) * {:.6g} = {}".format(beta,   (1/beta)  *  penalty_2, penalty_2))
+	print("\n[same_day_bonus]: (gamma = {:.2f}) * {:.6g} = {}".format(gamma, (1/gamma) * same_day_bonus, same_day_bonus))
 
 	print("\n[PESSOAS POR TURNO]:", results["Z_array"].sum(axis=0), sep="\n", end="\n\n")
 	print("[TURNOS POR PESSOA]:", results["Z_array"].sum(axis=1), sep="\n", end="\n\n")
@@ -76,7 +83,7 @@ def show_results(results):
 	print_enumeration(results["Z_array"])
 
 
-def main(datafile=default_data_file, min_staff=5, alpha=0.1, beta=0.01, verbose=1, solver_options=None):
+def main(datafile=default_data_file, namesfile=default_volunteers_file, min_staff=5, alpha=1.0, beta=0.04, gamma=0.1, verbose=1, solver_options=None):
 	'''Notação:
 	M = min_staff: número mínimo de voluntários por turno.
 	i = número (código) da pessoa. vai de 1 a N (talvez 28?)
@@ -91,9 +98,12 @@ def main(datafile=default_data_file, min_staff=5, alpha=0.1, beta=0.01, verbose=
 	Variável auxiliar: L_i = load[i] == sum_j Z[i, j] == (soma da linha i de Z) == número de turnos alocados pra pessoa i.
 
 	OBJETIVO: minimizar o máximo dos load[i], conforme disponibilidade das pessoas, orientando-se também pelas preferências.
+
+	* Por enquanto, não estamos usando `preference` e `prev_week`, já que poucos usaram esses recursos na planilha.
 	'''
 	table_string = read_data(datafile)
-	available, preference, prev_week = data_to_array(table_string)
+	names_string = read_data(namesfile)
+	available, preference, prev_week, managers = data_to_array(table_string, names_string)
 	N, T = available.shape
 
 	Z = cp.Variable((N, T), name="Z", boolean=True)
@@ -106,39 +116,57 @@ def main(datafile=default_data_file, min_staff=5, alpha=0.1, beta=0.01, verbose=
 	# load[i] == 'número de turnos alocados para a pessoa i' == sum(Z[i,j] para cada j)
 	load = cp.sum(Z, axis=1)
 
+	# Variável para induzir a preferência de soluções sem muita gente contribuindo em um só turno do dia:
+	same_day = cp.Variable((N, T//2))
+
 	constraints = [
-		# somatório em i (ou seja, somatório de cada coluna) deve ser, no mínimo, min_staff:
-		cp.sum(Z, axis=0) >= min_staff,
+		# Sempre que A_ij==0, impõe-se Z_ij==0:
+		Z <= available,
 
-		# a restrição abaixo deixaria o problema inviável, pois há poucos dados (e não teria como ter 5 pessoas por turno)
-		# Z <= preference,  # (por isso está comentado, enquanto as pessoas ainda não preencheram os dados)
+		# Somatório em i (somatório de cada coluna) deve ser, no mínimo, min_staff:
+		cp.sum(Z, axis=0) == min_staff,
+
+		# Restrição para garantir a presença de no mínimo um dos `responsáveis` (managers) a cada turno:
+		cp.sum(Z[managers, :], axis=0) >= 1,
+
+		# Forma matricial das desigualdades same_day[:, j//2] <= min(Z[:, j], Z[:, j+1]), com j em (0, 2, 4, ..., T-2):
+		same_day <= Z[:, 0::2],
+		same_day <= Z[:, 1::2]
 	]
-	mean_load = (1 / N) * cp.sum(Z)  # <= usamos a igualdade cp.sum(load) == cp.sum(Z)
 
-	# FUNÇÃO OBJETIVO (função a ser MINIMIZADA): (por enquanto, não estamos usando a matriz `preference`)
+	# Expressão para a carga média por pessoa, usando a igualdade cp.sum(load) == cp.sum(Z):
+	mean_load = cp.sum(Z) / N
+
+	# Função Objetivo (função a ser MINIMIZADA):
 	load_cost = cp.norm_inf(load)  # máximo das entradas do vetor `load`
 
-	penalty_1 = alpha * cp.sum(cp.pos(Z - available))  # penalizar 0.01 para cada (i,j) tal que Z[i,j] > available[i,j].
-	penalty_2 = beta * cp.norm1(load - mean_load)  # penalizar cada load[i] que estiver longe da média
+	# PENALTY_1 DESATIVADO (substituído por zero), vide restrição `Z <= available` acima.
+	penalty_1 = cp.Constant(0)  # alpha * cp.sum(cp.pos(Z - available))  # penalizava-se alpha para cada entrada Z[i,j] > available[i,j].
+	penalty_2 = beta * cp.sum(cp.scalene(load - mean_load, 1.8, 1.0))  # penalizar cada load[i] longe da média (especialmente acima da média)
+	same_day_bonus = gamma * cp.sum(same_day)
 
-	objective = cp.Minimize(load_cost + penalty_1 + penalty_2)   # minimize ('máximo das entradas' do vetor load) + penalidades
+	objective = cp.Minimize(load_cost + penalty_1 + penalty_2 - same_day_bonus)   # minimize ('máximo das entradas' do vetor load) + penalidades
 	problem = cp.Problem(objective, constraints)   # <= problema de otimização sujeito às restrições acima.
 
 	if verbose >= 1:
 		print("# Solucionando problema de otimização.")
+
 	if solver_options is None:
 		solver_options = {"verbose": (verbose >= 2)}
 	elif "TimeLimit" in solver_options:
-		# ALERTA GAMBIARRA
-		# ASSUNTO: "cvxpy throws error when Gurobi solver encounters time limit"
+		# GAMBIARRA: "cvxpy throws error when Gurobi solver encounters time limit"
 		cp.settings.ERROR = [cp.settings.USER_LIMIT]
 		cp.settings.SOLUTION_PRESENT = [cp.settings.OPTIMAL, cp.settings.OPTIMAL_INACCURATE, cp.settings.SOLVER_ERROR]
 		# CONFERIR: https://github.com/cvxgrp/cvxpy/issues/735
-	if verbose >= 2: print("\n", "##########" * 10, "\n", sep="")
+
+	if verbose >= 2: print("\n", "# # # # # " * 9, "\n", sep="")
 	problem.solve(solver=cp.GUROBI, **solver_options)
-	if verbose >= 2: print("\n", "##########" * 10, "\n", sep="")
+	if verbose >= 2: print("\n", "# # # # # " * 9, "\n", sep="")
 
 	results_dict = {
+		"alpha":       alpha,
+		"beta":        beta,
+		"gamma":       gamma,
 		"Z":           Z,
 		"Z_array":     None,
 		"objective":   objective,
@@ -148,10 +176,11 @@ def main(datafile=default_data_file, min_staff=5, alpha=0.1, beta=0.01, verbose=
 		"load_cost":   load_cost,
 		"penalty_1":   penalty_1,
 		"penalty_2":   penalty_2,
+		"same_day_bonus": same_day_bonus
 	}
 
-	if problem.status == cp.OPTIMAL or results_dict["Z"] is not None:
-		results_dict["Z_array"] = np.asarray(Z.value, dtype=int)
+	if results_dict["Z"] is not None:
+		results_dict["Z_array"] = np.asarray(Z.value+0.1, dtype=int)
 		if problem.status != cp.OPTIMAL:
 			print("# WARNING. Talvez tenha atingido o tempo limite sem otimalidade?")
 			print("Status do problema: {}".format(problem.status))
@@ -166,7 +195,29 @@ def main(datafile=default_data_file, min_staff=5, alpha=0.1, beta=0.01, verbose=
 	return results_dict
 
 
+def gamma_tests(gamma_array=None, fixed_beta=0.7, time_limit=15, verbose=0):
+	"""Some tests for different values of gamma."""
+	gurobi_options = {"verbose": False, "TimeLimit": time_limit}
+	if gamma_array is None:
+		gamma_array = np.linspace(0.2, 0.36, 5)
+
+	L = []
+	for gamma in gamma_array:
+		results = main(min_staff=7, beta=fixed_beta, gamma=gamma, verbose=verbose, solver_options=gurobi_options)
+		L.append(results)
+
+		penalty_2 = results["penalty_2"].value
+		same_day_bonus = results["same_day_bonus"].value
+
+		print("\n# # # GAMMA = {} # # #".format(gamma))
+		print("[load_cost]: {}".format(results["load_cost"].value))
+		print("[penalty_2]: (beta = {:.2f}) * {:.6g} = {}".format(fixed_beta, penalty_2/fixed_beta, penalty_2))
+		print("[same_day_bonus]: (gamma = {:.2f}) * {:.6g} = {}\n".format(gamma, same_day_bonus/gamma, same_day_bonus))
+	return L
+
+
 if __name__ == "__main__":
-	print("[Teste simples com M=5]")
-	main(min_staff=5, verbose=2)
+	L = gamma_tests(gamma_array=[0.28])
+	resultado = L.pop()
+	print(resultado["Z_array"])
 
