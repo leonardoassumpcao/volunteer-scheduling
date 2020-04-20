@@ -8,7 +8,7 @@ Com isso, estudantes têm se oferecido para ajudar na distribuição das quentin
 
 ## Organização
 A modelagem matemática atual e alguns testes são apresentados em um [jupyter notebook](https://jupyter.org/) disponível no diretório `presentation` do projeto.
-O código-fonte da solução do problema está disponível no diretório `src`.
+O código-fonte da solução do problema está disponível em `src`. Alguns arquivos de saída ilustram a execução do programa no diretório `outputs`.
 
 ### Dependências
 São dependências do código as bibliotecas
