@@ -83,7 +83,7 @@ def show_results(results):
 	print_enumeration(results["Z_array"])
 
 
-def main(datafile=default_data_file, namesfile=default_volunteers_file, min_staff=5, alpha=1.0, beta=0.04, gamma=0.1, verbose=1, solver_options=None):
+def main(datafile=default_data_file, namesfile=default_volunteers_file, min_staff=5, alpha=1.0, beta=0.7, gamma=0.28, verbose=1, solver_options=None):
 	'''Notação:
 	M = min_staff: número mínimo de voluntários por turno.
 	i = número (código) da pessoa. vai de 1 a N (talvez 28?)
@@ -195,7 +195,7 @@ def main(datafile=default_data_file, namesfile=default_volunteers_file, min_staf
 	return results_dict
 
 
-def gamma_tests(gamma_array=None, fixed_beta=0.7, time_limit=15, verbose=0):
+def gamma_tests(min_staff=7, gamma_array=None, fixed_beta=0.7, time_limit=15, verbose=0):
 	"""Some tests for different values of gamma."""
 	gurobi_options = {"verbose": False, "TimeLimit": time_limit}
 	if gamma_array is None:
@@ -203,7 +203,7 @@ def gamma_tests(gamma_array=None, fixed_beta=0.7, time_limit=15, verbose=0):
 
 	L = []
 	for gamma in gamma_array:
-		results = main(min_staff=7, beta=fixed_beta, gamma=gamma, verbose=verbose, solver_options=gurobi_options)
+		results = main(min_staff=min_staff, beta=fixed_beta, gamma=gamma, verbose=verbose, solver_options=gurobi_options)
 		L.append(results)
 
 		penalty_2 = results["penalty_2"].value
@@ -217,7 +217,15 @@ def gamma_tests(gamma_array=None, fixed_beta=0.7, time_limit=15, verbose=0):
 
 
 if __name__ == "__main__":
-	L = gamma_tests(gamma_array=[0.28])
-	resultado = L.pop()
-	print(resultado["Z_array"])
+	L = gamma_tests(min_staff=7, gamma_array=[0.28])
+	result = L.pop()
 
+	names = read_data(default_volunteers_file)
+	names = names.split("\n")
+
+	print("[Resultado da Demonstração]:")
+	for row, name in zip(result["Z_array"], names):
+		row = tuple(("x" if j else " ") for j in row)
+		days = zip(row[0::2], row[1::2])  # daily pairs (lunch & dinner)
+		days = " | ".join("{} {}".format(day, night) for day, night in days)
+		print("[", days, "]:", name)
