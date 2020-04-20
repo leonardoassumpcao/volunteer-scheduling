@@ -1,0 +1,41 @@
+Using license file /opt/gurobi901/gurobi.lic
+Academic license - for non-commercial use only
+
+# # # GAMMA = 0.28 # # #
+[load_cost]: 5.0
+[penalty_2]: (beta = 0.70) * 83.125 = 58.18749999999999
+[same_day_bonus]: (gamma = 0.28) * 41 = 11.48
+
+[Resultado da Demonstração]:
+[ x x |     |     |     |     |     | x x ]: Alex D. O.
+[     |     |     |     |     |     |     ]: Andria S. O. R.
+[     |     | x x |     | x x |     |     ]: Annatercia G. P.
+[ x x |     |     |     | x x |   x |     ]: Beatriz S. B. S.
+[     | x x |     | x x |     |     |     ]: Bianca B. D.
+[     |     |     |     |     |     |     ]: Breno Henrique O. S.
+[     |     | x x |     |     |     | x x ]: Bryan P.
+[     | x   | x   |     | x   | x   |     ]: Carlos Eduardo S.
+[ x x | x x |     |     |     |     |     ]: Charlie V. S.
+[ x   |     |     | x x |     | x x |     ]: Daisy S. D. Z. A.
+[     |     |     | x x |     | x x |   x ]: Danilo S. A. B.
+[     |     |     |     |     |     |     ]: Fabiana P. P. V.
+[     |     |     |     |     |     |     ]: Felipe O. M.
+[   x |     |     | x x |     |     | x x ]: Fred F. M.
+[ x   |     |     |     |     |     | x   ]: Gabriel P. C.
+[     | x x |     |     |     | x x |     ]: Hariom N. C.
+[     |     |     |     |     |     |     ]: Jonatã A. S.
+[     |     |     |     |     |     |     ]: Khaian L.
+[   x | x x |     |     | x x |     |     ]: Leon L. G. A. S.
+[ x x |     |     |     |     |     |     ]: Leonardo G. A.
+[     |     |     |     |     |     |     ]: Letícia B. P. A. R.
+[     |     |     |     |     |     |     ]: Lorena A. D. B.
+[     |     |   x |     | x x | x x |     ]: Lucas D. I. C.
+[     |     |     |     |     |     |     ]: Markus Vinicius G. H. C.
+[     |   x | x x |     | x x |     |     ]: Matheus A. O.
+[     |     | x x |     |     |     | x x ]: Miguel A. P. R.
+[     | x x |     | x x |   x |     |     ]: Otávio L. J.
+[     |     |     | x x |     |     | x x ]: Thiago C. P.
+[     |     | x x |     |     |     | x x ]: # Amanda A. C. L.
+[ x x |     |     | x x |     |     |     ]: # Ferdinando R. F.
+[     | x x | x   |     |     | x x |     ]: # Hélen B. S. M.
+[     |     |   x |     | x x | x x |     ]: # Joyce A. N.
